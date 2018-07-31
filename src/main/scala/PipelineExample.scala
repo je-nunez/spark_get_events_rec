@@ -1,5 +1,12 @@
 
-// spark/examples/src/main/scala/org/apache/spark/examples/ml/PipelineExample.scala
+// Note:
+// The stages and tasks performance code was written around the basic code of a Spark pipeline:
+//
+//    https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/ml/PipelineExample.scala
+//
+// although the stages and tasks performance code should be agnostic. It is based on the idea from:
+//
+//    https://github.com/apache/spark/blob/master/core/src/test/scala/org/apache/spark/scheduler/SparkListenerSuite.scala
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -39,6 +46,11 @@ import org.apache.spark.scheduler.{SparkListener,
                                    StageInfo,
                                    TaskInfo}
 
+import org.apache.spark.status.api.v1.{InputMetrics,
+                                       OutputMetrics,
+                                       ShuffleReadMetrics,
+                                       ShuffleWriteMetrics}
+
 
 
 object PipelineExample {
@@ -50,8 +62,9 @@ object PipelineExample {
       .config("spark.master", "local[*]")   // this is a demo: Spark in local mode
       .getOrCreate()
 
-    val listener = new MySparkListener
-    spark.sparkContext.addSparkListener(listener)
+    val performanceListener = new MySparkPerformanceListener
+    spark.sparkContext.addSparkListener(performanceListener)
+    // spark.listenerManager.register(executionListener)    // TODO
 
     // $example on$
     // Prepare training documents from a list of (id, text, label) tuples.
@@ -107,13 +120,13 @@ object PipelineExample {
 
     spark.stop()
 
-    listener.printStats()
+    performanceListener.printStats()
   }
 }
 
 
 
-private class MySparkListener extends SparkListener {
+private class MySparkPerformanceListener extends SparkListener {
 
   var taskInfoMetrics = mutable.Buffer[(TaskInfo, TaskMetrics)]()
   val stageInfos = mutable.Map[StageInfo, Seq[(TaskInfo, TaskMetrics)]]()
@@ -140,20 +153,52 @@ private class MySparkListener extends SparkListener {
       print(s"${prefix}${prefix}TaskMetrics: ")
 
       val sb = new mutable.StringBuilder()
-      sb.append(s"diskBytesSpilled: ${tm.diskBytesSpilled} ")
-      sb.append(s"executorCpuTime: ${tm.executorCpuTime} ")
-      sb.append(s"executorDeserializeCpuTime: ${tm.executorDeserializeCpuTime} ")
-      sb.append(s"executorDeserializeTime: ${tm.executorDeserializeTime} ")
-      sb.append(s"executorRunTime: ${tm.executorRunTime} ")
-      // sb.append(s"inputMetrics: ${tm.inputMetrics} ")
-      // sb.append(s"outputMetrics: ${tm.outputMetrics} ")
-      // sb.append(s"jvmGcTime: ${tm.jvmGcTime} ")
-      sb.append(s"memoryBytesSpilled: ${tm.memoryBytesSpilled} ")
-      sb.append(s"peakExecutionMemory: ${tm.peakExecutionMemory} ")
-      sb.append(s"resultSerializationTime: ${tm.resultSerializationTime} ")
-      sb.append(s"resultSize: ${tm.resultSize}")
-      println(sb)
+      sb.append(s"""diskBytesSpilled: ${tm.diskBytesSpilled}
+                   |executorCpuTime: ${tm.executorCpuTime}
+                   |executorDeserializeCpuTime: ${tm.executorDeserializeCpuTime}
+                   |executorDeserializeTime: ${tm.executorDeserializeTime}
+                   |executorRunTime: ${tm.executorRunTime}
+                   |memoryBytesSpilled: ${tm.memoryBytesSpilled}
+                   |peakExecutionMemory: ${tm.peakExecutionMemory}
+                   |resultSerializationTime: ${tm.resultSerializationTime}
+                   |resultSize: ${tm.resultSize}"""
+                   .stripMargin.replaceAll("\n", " "))
 
+      //              |inputMetrics: ${tm.inputMetrics}
+      //              |outputMetrics: ${tm.outputMetrics}
+      //              |jvmGcTime: ${tm.jvmGcTime}
+
+      val im = tm.inputMetrics
+      sb.append("\n" + s"""${prefix}${prefix}${prefix}InputMetrics:
+                          |bytesRead ${im.bytesRead}
+                          |recordsRead ${im.recordsRead}"""
+                          .stripMargin.replaceAll("\n", " "))
+
+      val om = tm.outputMetrics
+      sb.append("\n" + s"""${prefix}${prefix}${prefix}OutputMetrics:
+                          |bytesWritten ${om.bytesWritten}
+                          |recordsWritten ${om.recordsWritten}"""
+                          .stripMargin.replaceAll("\n", " "))
+
+      val readMetrics = tm.shuffleReadMetrics
+      sb.append("\n" + s"""${prefix}${prefix}${prefix}ShuffleReadMetrics:
+                          |fetchWaitTime ${readMetrics.fetchWaitTime}
+                          |localBlocksFetched ${readMetrics.localBlocksFetched}
+                          |localBytesRead ${readMetrics.localBytesRead}
+                          |recordsRead ${readMetrics.recordsRead}
+                          |remoteBlocksFetched ${readMetrics.remoteBlocksFetched}
+                          |remoteBytesRead ${readMetrics.remoteBytesRead}
+                          |remoteBytesReadToDisk ${readMetrics.remoteBytesReadToDisk}"""
+                          .stripMargin.replaceAll("\n", " "))
+
+      val writeMetrics = tm.shuffleWriteMetrics
+      sb.append("\n" + s"""${prefix}${prefix}${prefix}ShuffleWriteMetrics:
+                          |bytesWritten ${writeMetrics.bytesWritten}
+                          |recordsWritten ${writeMetrics.recordsWritten}
+                          |writeTime ${writeMetrics.writeTime}"""
+                          .stripMargin.replaceAll("\n", " "))
+
+      println(sb)
     }
 
     if (0 < taskInfoMetrics.length) {
@@ -171,7 +216,7 @@ private class MySparkListener extends SparkListener {
                                  seqTiTm.zipWithIndex foreach {
                                     case (tuple, idx) => {
                                             print(s"  $idx: ")
-                                            printTaskMetrics(tuple._1, tuple._2)
+                                            printTaskMetrics(tuple._1, tuple._2, "  ")
                                          }
                                  }
                               }
