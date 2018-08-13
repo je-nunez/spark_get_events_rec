@@ -39,19 +39,6 @@ import org.apache.spark.sql.Row
 // $example off$
 import org.apache.spark.sql.SparkSession
 
-import org.apache.spark.executor.TaskMetrics
-import org.apache.spark.scheduler.{SparkListener,
-                                   SparkListenerStageCompleted,
-                                   SparkListenerTaskEnd,
-                                   StageInfo,
-                                   TaskInfo}
-
-import org.apache.spark.status.api.v1.{InputMetrics,
-                                       OutputMetrics,
-                                       ShuffleReadMetrics,
-                                       ShuffleWriteMetrics}
-
-
 
 object PipelineExample {
 
@@ -62,7 +49,7 @@ object PipelineExample {
       .config("spark.master", "local[*]")   // this is a demo: Spark in local mode
       .getOrCreate()
 
-    val performanceListener = new MySparkPerformanceListener
+    val performanceListener = new AggregateSparkListener
     spark.sparkContext.addSparkListener(performanceListener)
     // spark.listenerManager.register(executionListener)    // TODO
 
@@ -123,108 +110,6 @@ object PipelineExample {
     performanceListener.printStats()
   }
 }
-
-
-
-private class MySparkPerformanceListener extends SparkListener {
-
-  var taskInfoMetrics = mutable.Buffer[(TaskInfo, TaskMetrics)]()
-  val stageInfos = mutable.Map[StageInfo, Seq[(TaskInfo, TaskMetrics)]]()
-
-  override def onTaskEnd(task: SparkListenerTaskEnd) {
-    val info = task.taskInfo
-    val metrics = task.taskMetrics
-    if (info != null && metrics != null) {
-      taskInfoMetrics += ((info, metrics))
-    }
-  }
-
-  override def onStageCompleted(stage: SparkListenerStageCompleted) {
-    stageInfos(stage.stageInfo) = taskInfoMetrics
-    taskInfoMetrics = mutable.Buffer.empty
-  }
-
-  def printStats(): Unit = {
-
-    def printTaskMetrics(ti: TaskInfo, tm: TaskMetrics, prefix: String = ""): Unit = {
-      println(s"""TaskInfo: ${ti.taskId} index: ${ti.index}
-                 |launched at ${ti.launchTime} status: ${ti.status}"""
-                 .stripMargin.replaceAll("\n", " "))
-      print(s"${prefix}${prefix}TaskMetrics: ")
-
-      val sb = new mutable.StringBuilder()
-      sb.append(s"""diskBytesSpilled: ${tm.diskBytesSpilled}
-                   |executorCpuTime: ${tm.executorCpuTime}
-                   |executorDeserializeCpuTime: ${tm.executorDeserializeCpuTime}
-                   |executorDeserializeTime: ${tm.executorDeserializeTime}
-                   |executorRunTime: ${tm.executorRunTime}
-                   |memoryBytesSpilled: ${tm.memoryBytesSpilled}
-                   |peakExecutionMemory: ${tm.peakExecutionMemory}
-                   |resultSerializationTime: ${tm.resultSerializationTime}
-                   |resultSize: ${tm.resultSize}"""
-                   .stripMargin.replaceAll("\n", " "))
-
-      //              |inputMetrics: ${tm.inputMetrics}
-      //              |outputMetrics: ${tm.outputMetrics}
-      //              |jvmGcTime: ${tm.jvmGcTime}
-
-      val im = tm.inputMetrics
-      sb.append("\n" + s"""${prefix}${prefix}${prefix}InputMetrics:
-                          |bytesRead ${im.bytesRead}
-                          |recordsRead ${im.recordsRead}"""
-                          .stripMargin.replaceAll("\n", " "))
-
-      val om = tm.outputMetrics
-      sb.append("\n" + s"""${prefix}${prefix}${prefix}OutputMetrics:
-                          |bytesWritten ${om.bytesWritten}
-                          |recordsWritten ${om.recordsWritten}"""
-                          .stripMargin.replaceAll("\n", " "))
-
-      val readMetrics = tm.shuffleReadMetrics
-      sb.append("\n" + s"""${prefix}${prefix}${prefix}ShuffleReadMetrics:
-                          |fetchWaitTime ${readMetrics.fetchWaitTime}
-                          |localBlocksFetched ${readMetrics.localBlocksFetched}
-                          |localBytesRead ${readMetrics.localBytesRead}
-                          |recordsRead ${readMetrics.recordsRead}
-                          |remoteBlocksFetched ${readMetrics.remoteBlocksFetched}
-                          |remoteBytesRead ${readMetrics.remoteBytesRead}
-                          |remoteBytesReadToDisk ${readMetrics.remoteBytesReadToDisk}"""
-                          .stripMargin.replaceAll("\n", " "))
-
-      val writeMetrics = tm.shuffleWriteMetrics
-      sb.append("\n" + s"""${prefix}${prefix}${prefix}ShuffleWriteMetrics:
-                          |bytesWritten ${writeMetrics.bytesWritten}
-                          |recordsWritten ${writeMetrics.recordsWritten}
-                          |writeTime ${writeMetrics.writeTime}"""
-                          .stripMargin.replaceAll("\n", " "))
-
-      println(sb)
-    }
-
-    if (0 < taskInfoMetrics.length) {
-      println("Remaining taskInfoMetrics... ")
-      taskInfoMetrics foreach { case (ti, tm) => printTaskMetrics(ti, tm) }
-    }
-
-    stageInfos foreach { case (si, seqTiTm) => {
-
-                                 println(s"""StageInfo: id ${si.stageId}
-                                            |name: ${si.name}
-                                            |parentIds: ${si.parentIds}"""
-                                            .stripMargin.replaceAll("\n", " "))
-
-                                 seqTiTm.zipWithIndex foreach {
-                                    case (tuple, idx) => {
-                                            print(s"  $idx: ")
-                                            printTaskMetrics(tuple._1, tuple._2, "  ")
-                                         }
-                                 }
-                              }
-                       }
-  }
-
-}
-
 
 // scalastyle:on println
 

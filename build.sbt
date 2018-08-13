@@ -17,6 +17,8 @@ lazy val apacheSparkVersion = "2.3.1"
 
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % apacheSparkVersion % "provided",
-  "org.apache.spark" %% "spark-mllib" % apacheSparkVersion
+  "org.apache.spark" %% "spark-mllib" % apacheSparkVersion,
+
+  "org.apache.logging.log4j" %% "log4j-api-scala" % "11.0"
 )
 
