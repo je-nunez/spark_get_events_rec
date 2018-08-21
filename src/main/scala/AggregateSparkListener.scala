@@ -8,7 +8,7 @@
 //
 //    https://github.com/apache/spark/blob/master/core/src/test/scala/org/apache/spark/scheduler/SparkListenerSuite.scala
 
-
+import java.lang.System.currentTimeMillis
 
 import scala.collection.mutable
 
@@ -62,6 +62,12 @@ class AggregateSparkListener extends SparkListener {
 
   @transient lazy val logger = Logger.getLogger(getClass.getName)
 
+  // TODO: use this events time-line using epoch in milliseconds and the event
+  //       (there should be also a method that truncates this buffer so as to
+  //        free memory.)
+  protected var eventsTimeLine = mutable.Buffer[(Long, SparkListenerEvent)]()
+
+  // TODO: remove use of these ones, in favor of eventsTimeLine
   var taskInfoMetrics = mutable.Buffer[(TaskInfo, TaskMetrics)]()
   val stageInfos = mutable.Map[StageInfo, Seq[(TaskInfo, TaskMetrics)]]()
 
@@ -140,6 +146,15 @@ class AggregateSparkListener extends SparkListener {
       speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = { }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = {
+
+    eventsTimeLine += ( (currentTimeMillis, event) )
+
+    // TODO: this part of the code is more for printing the events time-line
+
+    // (Note: the best option to serialize SparkListenerEvent events as JSON, if
+    //        desired, is to consult the methods of the object
+    //        org.apache.spark.util.JsonProtocol.)
+
     event match {
       case appEnd: SparkListenerApplicationEnd => {
         logger.debug(s"SparkListenerApplicationEnd: time = ${appEnd.time}")
@@ -262,6 +277,7 @@ class AggregateSparkListener extends SparkListener {
     }
  }
 
+  // TODO: convert this part of the code to printing the events time-line
 
   def printStats(): Unit = {
 
