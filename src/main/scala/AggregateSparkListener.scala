@@ -62,92 +62,162 @@ class AggregateSparkListener extends SparkListener {
 
   @transient lazy val logger = Logger.getLogger(getClass.getName)
 
-  // TODO: use this events time-line using epoch in milliseconds and the event
-  //       (there should be also a method that truncates this buffer so as to
-  //        free memory.)
+  // TODO 1: is it necessary here an explicit timestamp (in milliseconds) in front of the
+  // SparkListenerEvent? Because most classes implementing SparkListenerEvent contains
+  // some kind of timestamp inside, but with different names.
+  // TODO 2: there should be also a method that truncates this buffer so as to free memory.
   protected var eventsTimeLine = mutable.Buffer[(Long, SparkListenerEvent)]()
 
   // TODO: remove use of these ones, in favor of eventsTimeLine
   var taskInfoMetrics = mutable.Buffer[(TaskInfo, TaskMetrics)]()
   val stageInfos = mutable.Map[StageInfo, Seq[(TaskInfo, TaskMetrics)]]()
 
+  // TODO: refine client interface below
+
+  def getEvents: Array[(Long, SparkListenerEvent)] = eventsTimeLine.toArray
+
+  def map[A](iterFunction: (Long, SparkListenerEvent) => A): Seq[A] = {
+    eventsTimeLine map { case (ts, event) => iterFunction(ts, event) }
+  }
+
+  def foreach(iterFunction: (Long, SparkListenerEvent) => Unit): Unit = {
+    eventsTimeLine foreach { case (ts, event) => iterFunction(ts, event) }
+  }
+
+  // utility method:
+
+  protected def recordEvent(event: SparkListenerEvent): Unit = {
+    eventsTimeLine += ( (currentTimeMillis, event) )
+  }
+
+  // listen for events from Spark
+
   override def onTaskEnd(task: SparkListenerTaskEnd) {
+    recordEvent(task)
+
+    /*
     val info = task.taskInfo
     val metrics = task.taskMetrics
     if (info != null && metrics != null) {
       taskInfoMetrics += ((info, metrics))
     }
+    */
   }
 
   override def onStageCompleted(stage: SparkListenerStageCompleted) {
+    recordEvent(stage)
+    /*
     stageInfos(stage.stageInfo) = taskInfoMetrics
     taskInfoMetrics = mutable.Buffer.empty
+     */
   }
 
+  override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+    recordEvent(stageSubmitted)
+  }
 
-  override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = { }
+  override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {
+    recordEvent(taskStart)
+  }
 
-  override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = { }
+  override def onTaskGettingResult(taskGettingResult: SparkListenerTaskGettingResult): Unit = {
+    recordEvent(taskGettingResult)
+  }
 
-  override def onTaskGettingResult(taskGettingResult: SparkListenerTaskGettingResult): Unit = { }
+  override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
+    recordEvent(jobStart)
+  }
 
-  override def onJobStart(jobStart: SparkListenerJobStart): Unit = { }
+  override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+    recordEvent(jobEnd)
+  }
 
-  override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = { }
+  override def onEnvironmentUpdate(environmentUpdate: SparkListenerEnvironmentUpdate): Unit = {
+    recordEvent(environmentUpdate)
+  }
 
-  override def onEnvironmentUpdate(environmentUpdate: SparkListenerEnvironmentUpdate): Unit = { }
-
-  override def onBlockManagerAdded(blockManagerAdded: SparkListenerBlockManagerAdded): Unit = { }
+  override def onBlockManagerAdded(blockManagerAdded: SparkListenerBlockManagerAdded): Unit = {
+    recordEvent(blockManagerAdded)
+  }
 
   override def onBlockManagerRemoved(
-      blockManagerRemoved: SparkListenerBlockManagerRemoved): Unit = { }
+      blockManagerRemoved: SparkListenerBlockManagerRemoved): Unit = {
+    recordEvent(blockManagerRemoved)
+  }
 
-  override def onUnpersistRDD(unpersistRDD: SparkListenerUnpersistRDD): Unit = { }
+  override def onUnpersistRDD(unpersistRDD: SparkListenerUnpersistRDD): Unit = {
+    recordEvent(unpersistRDD)
+  }
 
-  override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = { }
+  override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = {
+    recordEvent(applicationStart)
+  }
 
-  override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = { }
+  override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
+    recordEvent(applicationEnd)
+  }
 
   override def onExecutorMetricsUpdate(
-      executorMetricsUpdate: SparkListenerExecutorMetricsUpdate): Unit = { }
+      executorMetricsUpdate: SparkListenerExecutorMetricsUpdate): Unit = {
+    recordEvent(executorMetricsUpdate)
+  }
 
-  override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = { }
+  override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
+    recordEvent(executorAdded)
+  }
 
-  override def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = { }
+  override def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = {
+    recordEvent(executorRemoved)
+  }
 
   override def onExecutorBlacklisted(
-      executorBlacklisted: SparkListenerExecutorBlacklisted): Unit = { }
+      executorBlacklisted: SparkListenerExecutorBlacklisted): Unit = {
+    recordEvent(executorBlacklisted)
+  }
 
   /*
    *
   override def onExecutorBlacklistedForStage(
       executorBlacklistedForStage: SparkListenerExecutorBlacklistedForStage
-    ): Unit = { }
+    ): Unit = {
+    recordEvent(executorBlacklistedForStage)
+  }
 
   override def onNodeBlacklistedForStage(
       nodeBlacklistedForStage: SparkListenerNodeBlacklistedForStage
-    ): Unit = { }
+    ): Unit = {
+    recordEvent(nodeBlacklistedForStage)
+  }
    *
    */
 
 
   override def onExecutorUnblacklisted(
-      executorUnblacklisted: SparkListenerExecutorUnblacklisted): Unit = { }
+      executorUnblacklisted: SparkListenerExecutorUnblacklisted): Unit = {
+    recordEvent(executorUnblacklisted)
+  }
 
   override def onNodeBlacklisted(
-      nodeBlacklisted: SparkListenerNodeBlacklisted): Unit = { }
+      nodeBlacklisted: SparkListenerNodeBlacklisted): Unit = {
+    recordEvent(nodeBlacklisted)
+  }
 
   override def onNodeUnblacklisted(
-      nodeUnblacklisted: SparkListenerNodeUnblacklisted): Unit = { }
+      nodeUnblacklisted: SparkListenerNodeUnblacklisted): Unit = {
+    recordEvent(nodeUnblacklisted)
+  }
 
-  override def onBlockUpdated(blockUpdated: SparkListenerBlockUpdated): Unit = { }
+  override def onBlockUpdated(blockUpdated: SparkListenerBlockUpdated): Unit = {
+    recordEvent(blockUpdated)
+  }
 
   override def onSpeculativeTaskSubmitted(
-      speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = { }
+      speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = {
+    recordEvent(speculativeTask)
+  }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = {
-
-    eventsTimeLine += ( (currentTimeMillis, event) )
+    recordEvent(event)
 
     // TODO: this part of the code is more for printing the events time-line
 

@@ -108,6 +108,21 @@ object PipelineExample {
     spark.stop()
 
     performanceListener.printStats()
+
+    println(s"Number of events: ${performanceListener.getEvents.length}")
+
+    performanceListener.foreach( (ts, event) => {
+         // a simple example matching only the SparkListenerJobStart events
+         import org.apache.spark.scheduler.SparkListenerTaskStart
+         event match {
+           case tks: SparkListenerTaskStart => {
+             println(s"${ts}: TaskStart: stage: ${tks.stageId}, attemptId: ${tks.stageAttemptId}")
+           }
+           case _ =>
+         }
+      }
+    )
+
   }
 }
 
