@@ -55,17 +55,34 @@ import org.apache.spark.sql.streaming.StreamingQueryListener
 
 object SparkListenerToStr {
 
-  // taken from:
+  // Inspired by:
   //  https://stackoverflow.com/questions/23128433/simple-iteration-over-case-class-fields
+  // with recursive printing of subfields in fields. Another option would be to use a
+  // JSON serialization library, to convert the case class not to a string, but to a
+  // proper JSON string.
+
   object Implicits {
 
     implicit class CaseClassToString(c: AnyRef) {
       def toStringWithFields: String = {
         val fields = (Map[String, Any]() /: c.getClass.getDeclaredFields) { (a, f) =>
           f.setAccessible(true)
-          a + (f.getName -> f.get(c))
+          val fType: Class[_] = f.getType
+          val fTypeSuper = fType.getSuperclass
+          val fVal: Object = f.get(c)
+          if (fVal == null) {
+            a + (f.getName -> """null""")
+          } else if (fTypeSuper == null || fVal.isInstanceOf[String]) {
+            // TODO: handle the case of lists, for probably better representing [pretty-printing]
+            //       elements (subfields) in lists (and arrays)
+            a + (f.getName -> fVal)
+          } else if (fVal.isInstanceOf[AnyRef]) {
+                    a + (f.getName + ": " + fType.getName -> f.get(c).toStringWithFields)
+          } else {
+            a + (f.getName -> fVal)
+          }
         }
- 
+
         s"${c.getClass.getName}(${fields.mkString(", ")})"
       }
     }
@@ -73,9 +90,9 @@ object SparkListenerToStr {
 
   import Implicits._
 
-  def convert(event: SparkListenerEvent): String = {
+  def convert(sparkEvent: SparkListenerEvent): String = {
 
-    event match {
+    sparkEvent match {
       case appEnd: SparkListenerApplicationEnd => {
         appEnd.toStringWithFields
         // s"SparkListenerApplicationEnd: time = ${appEnd.time}"
