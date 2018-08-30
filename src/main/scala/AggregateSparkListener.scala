@@ -1,10 +1,5 @@
 
-// Note:
-// The stages and tasks performance code was written around the basic code of a Spark pipeline:
-//
-//    https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/ml/PipelineExample.scala
-//
-// although the stages and tasks performance code should be agnostic. It is based on the idea from:
+// Some code in this section is inspired by:
 //
 //    https://github.com/apache/spark/blob/master/core/src/test/scala/org/apache/spark/scheduler/SparkListenerSuite.scala
 
